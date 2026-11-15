@@ -73,7 +73,8 @@ A.screens.home = async function () {
   s.appendChild(A.h('div.quick-row', null,
     A.h('button.chip', { type: 'button', onclick: () => A.router.go('assistant', {}) }, '🤖 עוזר העיצוב'),
     A.h('button.chip', { type: 'button', onclick: () => A.router.go('memories', {}) }, '🗓️ זיכרונות'),
-    A.h('button.chip', { type: 'button', onclick: () => A.scan.start() }, '📷 סריקת תמונה ישנה')));
+    A.h('button.chip', { type: 'button', onclick: () => A.scan.start() }, '📷 סריקת תמונה ישנה'),
+    A.h('button.chip', { type: 'button', onclick: () => A.cloud.join() }, '🤝 הצטרפות לאלבום משותף')));
   /* היום לפני שנה */
   A.memories.todayCard().then(card => { if (card) s.insertBefore(card, A.$('.shelf-wrap', s)); });
   /* המדף */
@@ -137,7 +138,7 @@ A.shelf.build = async function (albums) {
     b.style.setProperty('--w', W + 'px'); b.style.setProperty('--h', Math.min(130, H) + 'px'); b.style.setProperty('--t', T + 'px'); b.style.setProperty('--c', al.coverColor);
     const front = A.h('div.f.front'), spine = A.h('div.f.spine', null, A.h('span', null, al.name)), top = A.h('div.f.top'), pages = A.h('div.f.pages');
     const obj = A.h('div.obj', null, front, spine, top, pages);
-    b.append(obj, A.h('div.blabel', null, (al.favorite ? '⭐ ' : '') + (al.locked ? '🔒 ' : '') + al.name));
+    b.append(obj, A.h('div.blabel', null, (al.favorite ? '⭐ ' : '') + (al.locked ? '🔒 ' : '') + (al.share ? '👨‍👩‍👧 ' : '') + al.name));
     A.render.cover(al, 220).then(c => A.canvasToBlob(c, 'image/jpeg', 0.85)).then(bl => { front.style.backgroundImage = 'url("' + URL.createObjectURL(bl) + '")'; }).catch(() => {});
     spine.style.background = al.coverColor;
     let pressT = null, long = false;
@@ -166,6 +167,8 @@ A.albumMenu = async function (al) {
     ['📋', 'העתקת אלבום', async () => { const c = JSON.parse(JSON.stringify(al)); c.id = A.uid(); c.name = al.name + ' (עותק)'; c.createdAt = Date.now(); c.pages.forEach(p => { p.id = A.uid(); p.elements.forEach(e => { e.id = A.uid(); }); }); await A.db.saveAlbum(c); A.toast('האלבום הועתק'); A.router.refresh(); }],
     ['🔒', al.locked ? 'ביטול נעילה' : 'נעילת אלבום', () => A.security.toggleAlbumLock(al)],
     ['📤', 'יצוא ושיתוף', async () => { if (await A.security.unlockAlbum(al)) A.exporter.menu(al); }],
+    ['🌐', al.pub ? 'קישור וקוד QR לצפייה (מפורסם)' : 'פרסום לצפייה בקישור וקוד QR', async () => { if (await A.security.unlockAlbum(al)) { if (al.pub) A.cloud.showPub(al); else A.cloud.publish(al); } }],
+    ['👨‍👩‍👧', al.share ? 'אלבום משותף — סנכרון והזמנה' : 'שיתוף עם המשפחה (אלבום משותף)', async () => { if (await A.security.unlockAlbum(al)) A.cloud.shareMenu(al); }],
     ['🗑️', 'מחיקת אלבום', () => A.deleteAlbum(al)]
   ];
   const box = A.h('div.list');

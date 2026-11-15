@@ -1,0 +1,44 @@
+name: Web version
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths: [ 'app/src/main/assets/www/**', 'web/**', '.github/workflows/pages.yml' ]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          cp -r web/* site/
+          cp -r app/src/main/assets/www site/app
+          pip install pillow
+          python3 - <<'PY'
+          from PIL import Image, ImageDraw
+          for n in (192, 512):
+              im = Image.new('RGB', (n, n), '#8b5a2b')
+              d = ImageDraw.Draw(im)
+              u = n / 16
+              d.rounded_rectangle([3*u, 2.5*u, 13*u, 13.5*u], radius=u, fill='#f6f1e8')
+              d.rectangle([3*u, 2.5*u, 4.4*u, 13.5*u], fill='#5c3a1a')
+              d.rounded_rectangle([5.6*u, 4.5*u, 11.6*u, 9.5*u], radius=u*0.4, fill='#b5793f')
+              d.ellipse([9.2*u, 5.2*u, 10.6*u, 6.6*u], fill='#f3d27a')
+              d.polygon([(5.6*u, 9.5*u), (8*u, 6.8*u), (10.2*u, 9.5*u)], fill='#6b8f4e')
+              im.save(f'site/app/icon-{n}.png')
+          PY
+          ls -la site site/app
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4

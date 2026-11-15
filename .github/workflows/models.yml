@@ -16,7 +16,7 @@ jobs:
       - name: Install
         run: |
           pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
-          pip install "numpy<2" onnx onnxruntime scikit-image pillow
+          pip install "numpy<2" onnx onnxruntime scikit-image pillow ipython
       - name: Get colorization model
         run: git clone --depth 1 https://github.com/richzhang/colorization.git colz
       - name: Export and verify

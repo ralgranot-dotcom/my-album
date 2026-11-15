@@ -137,7 +137,7 @@ A.backup.create = async function (opts) {
   if (opts.albumId) { photos = photos.filter(p => pIds.has(p.id)); media = media.filter(m => mIds.has(m.id)); }
   const stamp = new Date(); const ds = stamp.getFullYear() + '-' + String(stamp.getMonth() + 1).padStart(2, '0') + '-' + String(stamp.getDate()).padStart(2, '0');
   const fname = opts.albumId ? A.safeName(albums[0].name) + '.myalbum' : 'גיבוי_האלבום_שלי_' + ds + (opts.password ? '_מוצפן' : '') + '.myalbum';
-  const sink = A.fileSink(fname, 'application/octet-stream');
+  const sink = opts.sink || A.fileSink(fname, 'application/octet-stream');
   const pr = A.progress(opts.albumId ? 'אורז את האלבום…' : 'יוצר גיבוי…');
   try {
     const w = await A.backup.writer(sink, opts.password);
@@ -193,7 +193,7 @@ A.backup.restore = async function (file) {
   if (!mode) return;
   if (mode === 'replace' && !(await A.confirm('החלפת הכול', 'כל האלבומים והתמונות שבמכשיר יימחקו ויוחלפו בתוכן הגיבוי. להמשיך?', 'החלפה', true))) return;
   r = await A.backup.reader(file, pass);
-  await r.next(); await r.next();
+  await (await r.next()).read(); await (await r.next()).read();
   const pr2 = A.progress('משחזר…');
   try {
     if (mode === 'replace') { for (const s of ['albums', 'photos', 'media', 'blobs']) await A.db.clear(s); A.cache.urls.clear(); }
@@ -245,8 +245,14 @@ A.screens.backup = async function () {
       A.h('p.muted', null, (last ? 'גיבוי אחרון: ' + A.fmtDate(last) : 'עדיין לא נוצר גיבוי.') + (est ? ' · נפח משוער: ' + A.fmtBytes(est.usage) : '')),
       A.h('button.btn.primary', { type: 'button', onclick: () => go(false, 'save') }, '💾 גיבוי לקובץ במכשיר'),
       A.h('button.btn', { type: 'button', onclick: () => go(true, 'save') }, '🔐 גיבוי מוצפן בסיסמה'),
-      A.h('button.btn', { type: 'button', onclick: () => go(true, 'share') }, '☁️ גיבוי מוצפן לענן (Google Drive וכד׳)'),
-      A.h('p.muted', null, 'גיבוי לענן נעשה רק באישורכם: הקובץ מוצפן במכשיר, ואתם בוחרים לאן לשתף אותו.')),
+      A.h('button.btn', { type: 'button', onclick: () => go(true, 'share') }, '📤 גיבוי מוצפן ושיתוף ל-Google Drive וכד׳')),
+    A.h('section.card', null, A.h('h2', null, '☁️ גיבוי לענן'),
+      A.h('p', null, 'גיבוי ישיר לענן של האפליקציה, מוצפן במכשיר בסיסמה שלכם. לשחזור במכשיר חדש צריך את קוד השחזור ואת הסיסמה.'),
+      A.h('p.muted', null, (+localStorage.getItem('lastCloudBackup') ? 'גיבוי אחרון לענן: ' + A.fmtDate(+localStorage.getItem('lastCloudBackup'), true) : 'עדיין לא בוצע גיבוי לענן מהמכשיר הזה.')),
+      A.h('button.btn.primary', { type: 'button', onclick: () => A.cloud.backupUp() }, '☁️ גיבוי לענן עכשיו'),
+      localStorage.getItem('cloudBackup') ? A.h('button.btn', { type: 'button', onclick: () => A.cloud.showBackupCode(JSON.parse(localStorage.getItem('cloudBackup'))) }, '🔑 הצגת קוד השחזור') : null,
+      A.h('button.btn', { type: 'button', onclick: () => A.cloud.backupDown() }, '📥 שחזור מהענן (עם קוד שחזור)'),
+      localStorage.getItem('cloudBackup') ? A.h('button.btn', { type: 'button', onclick: () => A.cloud.forgetBackup() }, '🗑️ מחיקת הגיבוי מהענן') : null),
     A.h('section.card', null, A.h('h2', null, 'שחזור / ייבוא אלבום'),
       A.h('p', null, 'בחרו קובץ גיבוי (‎.myalbum) או קובץ אלבום שהועבר ממכשיר אחר.'),
       A.h('button.btn.primary', { type: 'button', onclick: restore }, '📂 בחירת קובץ לשחזור')),

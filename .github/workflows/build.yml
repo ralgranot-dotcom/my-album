@@ -33,6 +33,7 @@ jobs:
           VN="1.0.$((GITHUB_RUN_NUMBER-1))"
           echo "VN=$VN" >> "$GITHUB_ENV"
           cp app/build/outputs/apk/release/app-release.apk "MyAlbum-$VN.apk"
+          cp app/build/outputs/apk/release/app-release.apk MyAlbum.apk
           ls -la *.apk
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -42,5 +43,7 @@ jobs:
           body: |
             📸 האלבום שלי — גרסה ${{ env.VN }} (בנייה ${{ github.run_number }})
             ${{ github.event.head_commit.message }}
-          files: MyAlbum-${{ env.VN }}.apk
+          files: |
+            MyAlbum-${{ env.VN }}.apk
+            MyAlbum.apk
           make_latest: true

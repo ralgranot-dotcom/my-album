@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>📸 אלבום</title>
+<meta name="robots" content="noindex">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #2b1d12; color: #f3e6d0; font-family: "Noto Sans Hebrew", Rubik, Arial, sans-serif; overflow: hidden; }
+  header { position: fixed; top: 0; left: 0; right: 0; padding: 10px 14px; text-align: center; font-weight: 700; z-index: 5; background: rgba(20,12,6,.6); }
+  #stage { position: fixed; inset: 46px 0 70px; display: flex; align-items: center; justify-content: center; perspective: 2000px; touch-action: pan-y; }
+  #book { position: relative; display: flex; flex-direction: row; box-shadow: 0 18px 50px rgba(0,0,0,.6); transition: transform .5s; }
+  .pg { background: #f6f1e6 center/100% 100% no-repeat; position: relative; }
+  .pg.r::after, .pg.l::after { content: ''; position: absolute; top: 0; bottom: 0; width: 14%; pointer-events: none; }
+  .pg.r::after { left: 0; background: linear-gradient(90deg, rgba(0,0,0,.25), transparent); }
+  .pg.l::after { right: 0; background: linear-gradient(270deg, rgba(0,0,0,.25), transparent); }
+  .flip { position: absolute; top: 0; height: 100%; transform-style: preserve-3d; transition: transform .7s cubic-bezier(.3,.1,.2,1); z-index: 3; }
+  .flip > div { position: absolute; inset: 0; backface-visibility: hidden; background: #f6f1e6 center/100% 100% no-repeat; }
+  .flip .b { transform: rotateY(180deg); }
+  .vids { position: absolute; bottom: 8px; left: 0; right: 0; display: flex; gap: 6px; justify-content: center; z-index: 4; }
+  .vids button { border: 0; border-radius: 20px; padding: 8px 14px; background: rgba(0,0,0,.7); color: #fff; font-size: 15px; }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px calc(env(safe-area-inset-bottom)); background: rgba(20,12,6,.88); }
+  nav button { width: 64px; height: 48px; border: 0; border-radius: 14px; background: rgba(255,230,190,.16); color: #fff; font-size: 26px; }
+  #info { font-size: 15px; }
+  #msg { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 30px; font-size: 18px; }
+  #player { position: fixed; inset: 0; background: rgba(0,0,0,.95); display: none; align-items: center; justify-content: center; z-index: 20; }
+  #player video, #player audio { max-width: 100%; max-height: 90%; }
+  #player .x { position: absolute; top: 14px; left: 14px; width: 48px; height: 48px; border-radius: 50%; border: 0; background: rgba(255,255,255,.2); color: #fff; font-size: 22px; }
+  footer { position: fixed; bottom: 74px; left: 0; right: 0; text-align: center; font-size: 12px; opacity: .6; }
+</style>
+</head>
+<body>
+<header id="title">📸 טוען אלבום…</header>
+<div id="msg">⏳ טוען…</div>
+<div id="stage" hidden><div id="book"></div></div>
+<footer>נוצר באפליקציה "האלבום שלי"</footer>
+<nav hidden id="nav"><button id="next" aria-label="הבא">‹</button><span id="info"></span><button id="prev" aria-label="הקודם">›</button></nav>
+<div id="player"><button class="x" aria-label="סגירה">✕</button><div id="pbox"></div></div>
+<script>
+'use strict';
+const BASE = 'https://ddytetgcdygmufitgxeg.supabase.co/storage/v1/object/public/myalbum-pub/';
+const id = (location.hash || '').replace(/[^a-f0-9]/g, '');
+const $ = s => document.querySelector(s);
+let meta, base, sides = [], spread = 0, pw = 0, ph = 0, busy = false;
+/* צדדים: 0=כריכה, 1..n=עמודים, n+1=כריכה אחורית. פריסות: [כריכה] [1|2] [3|4] … [אחורית] */
+function spreads() {
+  const n = meta.pages.length, out = [[null, 0]];
+  for (let i = 1; i <= n; i += 2) out.push([i, i + 1 <= n ? i + 1 : null]);
+  out.push([n + 1, null]);
+  return out;
+}
+function img(i) { return i === 0 ? base + 'cover.jpg' : i === meta.pages.length + 1 ? base + 'back.jpg' : base + 'p' + i + '.jpg'; }
+function size() {
+  const W = innerWidth - 16, H = innerHeight - 46 - 70 - 16, ar = meta.ar || 1;
+  const single = W < H * ar * 1.4;
+  pw = single ? Math.min(W, H * ar) : Math.min(W / 2, H * ar); ph = pw / ar;
+  return single;
+}
+function render() {
+  const single = size(), sp = sides[spread], book = $('#book');
+  book.innerHTML = '';
+  const list = single ? [sp[0] != null ? sp[0] : sp[1]] : (sp[0] === null ? [sp[1]] : sp[1] === null && spread === sides.length - 1 ? [sp[0]] : [sp[0], sp[1]]);
+  /* בעברית: העמוד הראשון בצד ימין */
+  list.forEach((s, k) => {
+    const d = document.createElement('div');
+    d.className = 'pg ' + (list.length === 2 ? (k === 0 ? 'r' : 'l') : '');
+    d.style.width = pw + 'px'; d.style.height = ph + 'px';
+    if (s != null) d.style.backgroundImage = 'url("' + img(s) + '")';
+    if (s != null && s >= 1 && s <= meta.pages.length) {
+      const v = (meta.pages[s - 1] || {}).v || [];
+      if (v.length) { const box = document.createElement('div'); box.className = 'vids'; v.forEach(x => { const b = document.createElement('button'); b.textContent = (x.t === 'audio' ? '🔊 ' : '▶️ ') + (x.n || (x.t === 'audio' ? 'הקלטה' : 'סרטון')); b.onclick = () => play(x); box.appendChild(b); }); d.appendChild(box); }
+    }
+    book.appendChild(d);
+  });
+  $('#info').textContent = spread === 0 ? 'כריכה' : spread === sides.length - 1 ? 'סוף' : 'עמודים ' + sides[spread].filter(x => x != null).join('–');
+  $('#next').disabled = spread >= sides.length - 1; $('#prev').disabled = spread <= 0;
+  [spread + 1, spread - 1].forEach(k => sides[k] && sides[k].forEach(s => { if (s != null) new Image().src = img(s); }));
+}
+function go(d) {
+  if (busy) return;
+  const t = spread + d;
+  if (t < 0 || t >= sides.length) return;
+  busy = true;
+  const book = $('#book'), f = document.createElement('div');
+  f.className = 'flip'; f.style.width = pw + 'px';
+  const single = size();
+  const front = document.createElement('div'), back = document.createElement('div'); front.className = 'f'; back.className = 'b';
+  const cur = sides[spread], nx = sides[t];
+  const fwd = d > 0;
+  const cs = single ? (cur[0] != null ? cur[0] : cur[1]) : (fwd ? cur[1] != null ? cur[1] : cur[0] : cur[0]);
+  const ns = single ? (nx[0] != null ? nx[0] : nx[1]) : (fwd ? nx[0] : nx[1] != null ? nx[1] : nx[0]);
+  if (cs != null) front.style.backgroundImage = 'url("' + img(cs) + '")';
+  if (ns != null) back.style.backgroundImage = 'url("' + img(ns) + '")';
+  f.append(front, back);
+  const kids = book.children;
+  if (single || kids.length === 1) { if (ns != null) kids[0].style.backgroundImage = 'url("' + img(ns) + '")'; }
+  else if (fwd) kids[1].style.backgroundImage = nx[1] != null ? 'url("' + img(nx[1]) + '")' : 'none';
+  else kids[0].style.backgroundImage = nx[0] != null ? 'url("' + img(nx[0]) + '")' : 'none';
+  const rect = book.getBoundingClientRect();
+  const leftHalf = fwd; /* קדימה בעברית: הדף השמאלי מתהפך ימינה */
+  f.style.left = (single ? 0 : leftHalf ? 0 : rect.width / 2) + 'px';
+  f.style.transformOrigin = single ? (fwd ? 'right center' : 'left center') : (leftHalf ? 'right center' : 'left center');
+  book.appendChild(f);
+  requestAnimationFrame(() => requestAnimationFrame(() => { f.style.transform = 'rotateY(' + (fwd ? 180 : -180) + 'deg)'; }));
+  setTimeout(() => { spread = t; render(); busy = false; }, 720);
+}
+function play(x) {
+  const el = document.createElement(x.t === 'audio' ? 'audio' : 'video');
+  el.src = base + x.f; el.controls = true; el.autoplay = true; el.playsInline = true;
+  $('#pbox').innerHTML = ''; $('#pbox').appendChild(el); $('#player').style.display = 'flex';
+}
+$('#player .x').onclick = () => { $('#pbox').innerHTML = ''; $('#player').style.display = 'none'; };
+$('#next').onclick = () => go(1); $('#prev').onclick = () => go(-1);
+addEventListener('keydown', e => { if (e.key === 'ArrowLeft') go(1); if (e.key === 'ArrowRight') go(-1); });
+let sx = null;
+$('#stage').addEventListener('pointerdown', e => { sx = e.clientX; });
+$('#stage').addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; sx = null; if (Math.abs(dx) > 40) go(dx > 0 ? 1 : -1); else go(e.clientX < innerWidth / 2 ? 1 : -1); });
+addEventListener('resize', () => meta && render());
+(async () => {
+  if (id.length !== 20) { $('#msg').textContent = 'הקישור אינו תקין.'; return; }
+  base = BASE + id + '/';
+  try {
+    const r = await fetch(base + 'album.json?t=' + Date.now());
+    if (!r.ok) throw 0;
+    meta = await r.json();
+  } catch (e) { $('#msg').textContent = 'האלבום לא נמצא. ייתכן שהבעלים ביטל את הפרסום.'; $('#title').textContent = '📸 אלבום'; return; }
+  document.title = '📸 ' + meta.title; $('#title').textContent = '📸 ' + meta.title;
+  base += ''; sides = spreads();
+  $('#msg').hidden = true; $('#msg').style.display = 'none'; $('#stage').hidden = false; $('#nav').hidden = false;
+  render();
+})();
+</script>
+</body>
+</html>
