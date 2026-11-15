@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- אלבום פתוח -->
+    <path android:fillColor="#3a1414" android:pathData="M24,36 L54,32 L84,36 L84,78 L54,74 L24,78 Z" />
+    <path android:fillColor="#f6f1e6" android:pathData="M27,37 L53,34 L53,72 L27,75 Z" />
+    <path android:fillColor="#efe6d3" android:pathData="M55,34 L81,37 L81,75 L55,72 Z" />
+    <path android:fillColor="#c9a96e" android:pathData="M31,41 L49,39 L49,55 L31,57 Z" />
+    <path android:fillColor="#8fb8d9" android:pathData="M59,40 L77,42 L77,58 L59,56 Z" />
+    <path android:fillColor="#6fa35a" android:pathData="M59,52 L65,47 L71,53 L77,50 L77,58 L59,56 Z" />
+    <path android:fillColor="#e2687d" android:pathData="M40,66 C36,63 33,61 33,58.5 C33,56.8 34.3,55.5 36,55.5 C37.2,55.5 38.3,56.1 39,57 C39.7,56.1 40.8,55.5 42,55.5 C43.7,55.5 45,56.8 45,58.5 C45,61 42,63 40,66 Z" />
+    <path android:strokeColor="#b08a3e" android:strokeWidth="1.2" android:pathData="M54,33 L54,74" />
+</vector>
