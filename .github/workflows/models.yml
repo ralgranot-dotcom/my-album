@@ -1,0 +1,47 @@
+name: AI models
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/models.yml' ]
+permissions:
+  contents: write
+jobs:
+  colorize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install "numpy<2" onnx onnxruntime scikit-image pillow
+      - name: Get colorization model
+        run: git clone --depth 1 https://github.com/richzhang/colorization.git colz
+      - name: Export and verify
+        working-directory: colz
+        run: |
+          python - <<'PY'
+          import torch, numpy as np, onnxruntime as ort, os
+          from colorizers import eccv16
+          m = eccv16(pretrained=True).eval()
+          x = torch.rand(1, 1, 256, 256) * 100
+          torch.onnx.export(m, x, '../colorize.onnx', input_names=['L'], output_names=['ab'], opset_version=13, do_constant_folding=True)
+          s = ort.InferenceSession('../colorize.onnx')
+          ref = m(x).detach().numpy()
+          got = s.run(None, {'L': x.numpy()})[0]
+          print('shape', got.shape, 'max diff', float(np.abs(ref - got).max()), 'ab range', float(got.min()), float(got.max()))
+          assert got.shape == (1, 2, 256, 256)
+          assert np.abs(ref - got).max() < 1e-2
+          assert np.abs(got).max() > 1
+          print('size MB', os.path.getsize('../colorize.onnx') / 1e6)
+          PY
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: models-1
+          name: מודלים לבינה מלאכותית (לא גרסת אפליקציה)
+          body: מודל צביעת תמונות שחור־לבן. האפליקציה מורידה אותו פעם אחת בעת השימוש הראשון בצביעה.
+          files: colorize.onnx
+          prerelease: true
+          make_latest: false

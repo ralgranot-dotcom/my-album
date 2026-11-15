@@ -52,6 +52,7 @@ public class MainActivity extends Activity {
     static final int REQ_FILE = 11, REQ_AUDIO = 12;
 
     WebView web;
+    AiTools ai;
     ValueCallback<Uri[]> fileCb;
     Uri cameraUri;
     PermissionRequest pendingPerm;
@@ -87,6 +88,14 @@ public class MainActivity extends Activity {
                 String path = u.getPath();
                 if (path == null || path.equals("/") || path.isEmpty()) path = "/index.html";
                 try {
+                    if (path.startsWith("/__ai/")) {
+                        File f = new File(new File(getCacheDir(), "ai"), new File(path).getName());
+                        WebResourceResponse r = new WebResourceResponse(path.endsWith(".png") ? "image/png" : "image/jpeg", null, new FileInputStream(f));
+                        Map<String, String> h = new HashMap<>();
+                        h.put("Cache-Control", "no-store");
+                        r.setResponseHeaders(h);
+                        return r;
+                    }
                     InputStream in = getAssets().open("www" + path);
                     String ext = path.substring(path.lastIndexOf('.') + 1).toLowerCase();
                     String mime = ext.equals("js") ? "application/javascript" : ext.equals("css") ? "text/css" : ext.equals("html") ? "text/html"
@@ -161,6 +170,7 @@ public class MainActivity extends Activity {
             }
         });
 
+        ai = new AiTools(this);
         web.addJavascriptInterface(new Bridge(), "AndroidBridge");
         setContentView(web);
         if (b != null) web.restoreState(b);
@@ -311,6 +321,33 @@ public class MainActivity extends Activity {
                 else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
             });
         }
+
+        @JavascriptInterface
+        public boolean aiAvailable() { return true; }
+
+        @JavascriptInterface
+        public void aiSegment(String id, String b64) { runOnUiThread(() -> ai.segment(id, b64)); }
+
+        @JavascriptInterface
+        public void aiLabels(String id, String b64, boolean translate) { runOnUiThread(() -> ai.labels(id, b64, translate)); }
+
+        @JavascriptInterface
+        public void aiTranslate(String id, String text) { runOnUiThread(() -> ai.translateLines(text, he -> callback(id, he != null, he))); }
+
+        @JavascriptInterface
+        public boolean aiHasColorModel() { return ai.hasModel(); }
+
+        @JavascriptInterface
+        public void aiDownloadColorModel(String id) { ai.downloadModel(id); }
+
+        @JavascriptInterface
+        public void aiColorize(String id, String b64, double strength) { ai.colorize(id, b64, strength); }
+
+        @JavascriptInterface
+        public String qrMake(String text, int size) { return AiTools.qr(text, size); }
+
+        @JavascriptInterface
+        public String qrRead(String b64) { return AiTools.readQr(b64); }
 
         @JavascriptInterface
         public void biometric(String id, String title) {
