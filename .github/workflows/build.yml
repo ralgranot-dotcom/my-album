@@ -34,6 +34,14 @@ jobs:
           echo "VN=$VN" >> "$GITHUB_ENV"
           cp app/build/outputs/apk/release/app-release.apk "MyAlbum-$VN.apk"
           cp app/build/outputs/apk/release/app-release.apk MyAlbum.apk
+      - name: Quick update package
+        run: |
+          (cd app/src/main/assets/www && zip -qr -X "$GITHUB_WORKSPACE/www.zip" .)
+          NAPI=$(grep -oP 'NATIVE_API = \K[0-9]+' app/src/main/java/com/eitan/myalbum/Ota.java)
+          SHA=$(sha256sum www.zip | cut -d' ' -f1)
+          echo "{\"code\": $GITHUB_RUN_NUMBER, \"name\": \"$VN\", \"native\": $NAPI, \"sha256\": \"$SHA\"}" > update.json
+          cat update.json
+          unzip -l www.zip | tail -3
           ls -la *.apk
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -46,4 +54,6 @@ jobs:
           files: |
             MyAlbum-${{ env.VN }}.apk
             MyAlbum.apk
+            www.zip
+            update.json
           make_latest: true

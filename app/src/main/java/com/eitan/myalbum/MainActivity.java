@@ -53,6 +53,7 @@ public class MainActivity extends Activity {
 
     WebView web;
     AiTools ai;
+    Ota ota;
     ValueCallback<Uri[]> fileCb;
     Uri cameraUri;
     PermissionRequest pendingPerm;
@@ -96,7 +97,8 @@ public class MainActivity extends Activity {
                         r.setResponseHeaders(h);
                         return r;
                     }
-                    InputStream in = getAssets().open("www" + path);
+                    InputStream in = ota.open(path);
+                    if (in == null) in = getAssets().open("www" + path);
                     String ext = path.substring(path.lastIndexOf('.') + 1).toLowerCase();
                     String mime = ext.equals("js") ? "application/javascript" : ext.equals("css") ? "text/css" : ext.equals("html") ? "text/html"
                             : ext.equals("svg") ? "image/svg+xml" : ext.equals("png") ? "image/png" : ext.equals("json") ? "application/json" : "application/octet-stream";
@@ -171,6 +173,8 @@ public class MainActivity extends Activity {
         });
 
         ai = new AiTools(this);
+        ota = new Ota(this);
+        ota.startup();
         web.addJavascriptInterface(new Bridge(), "AndroidBridge");
         setContentView(web);
         if (b != null) web.restoreState(b);
@@ -321,6 +325,27 @@ public class MainActivity extends Activity {
                 else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
             });
         }
+
+        @JavascriptInterface
+        public int getNativeApi() { return Ota.NATIVE_API; }
+
+        @JavascriptInterface
+        public String otaInfo() { if (!ota.active) return ""; org.json.JSONObject i = ota.info(); return i == null ? "" : i.toString(); }
+
+        @JavascriptInterface
+        public void otaApply(String id, String url, String sha, int code, String name, int nativeNeeded) { ota.apply(id, url, sha, code, name, nativeNeeded); }
+
+        @JavascriptInterface
+        public void otaReset() { ota.reset(); }
+
+        @JavascriptInterface
+        public void bootOk() { ota.bootOk(); }
+
+        @JavascriptInterface
+        public boolean otaRolledBack() { boolean r = ota.rolledBack; ota.rolledBack = false; return r; }
+
+        @JavascriptInterface
+        public void reloadApp() { runOnUiThread(() -> { web.clearCache(false); web.reload(); }); }
 
         @JavascriptInterface
         public boolean aiAvailable() { return true; }

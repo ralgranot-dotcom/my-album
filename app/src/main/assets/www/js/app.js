@@ -59,7 +59,8 @@ A.screens.home = async function () {
     A.h('div.brand', null, A.h('span.logo', null, '📸'), A.h('div', null, A.h('h1', null, 'האלבום שלי'), A.h('small', null, 'גרסה ' + A.VERSION))));
   s.appendChild(head);
   const upd = A.update && A.update.available;
-  if (upd) s.appendChild(A.h('button.update-btn', { type: 'button', onclick: () => A.update.install() }, '⬆️ שדרוג זמין — לחצו לעדכון לגרסה ' + upd.name));
+  if (upd) s.appendChild(A.h('button.update-btn', { type: 'button', onclick: () => A.update.install() }, '⬆️ עדכון לגרסה ' + upd.name + ' — לחצו לעדכון'));
+  else if (A.native.has()) s.appendChild(A.h('button.update-btn.idle', { type: 'button', onclick: () => A.update.check(true) }, '🔄 עדכון גרסה · מותקנת ' + A.VERSION));
   const grid = A.h('nav.main-grid', { 'aria-label': 'תפריט ראשי' },
     tile('📚', 'האלבומים שלי', () => A.$('.shelf-wrap', s).scrollIntoView({ behavior: 'smooth' })),
     tile('➕', 'יצירת אלבום חדש', () => A.router.go('albumForm', {})),
@@ -218,7 +219,7 @@ A.applyTheme = function () {
 
 A.boot = async function () {
   const fam = A.render.TEMPLATES.find(t => t.id === 'family'); if (fam) fam.name = 'קולאז׳ משפחתי';
-  if (A.native.has()) { const v = A.native.call('getVersionName'); if (v) A.VERSION = v; }
+  if (A.native.has()) { const v = A.native.call('getVersionName'); if (v) A.VERSION = v; const o = A.update.ota(); if (o && o.name) A.VERSION = o.name; }
   A.applyTheme();
   try { await A.db.open(); }
   catch (e) { A.$('#app').innerHTML = '<div class="empty"><h2>לא ניתן לפתוח את מסד הנתונים</h2><p>' + A.esc(e.message) + '</p></div>'; return; }
@@ -228,6 +229,8 @@ A.boot = async function () {
   const unlocked = await A.security.appGate();
   if (!unlocked) return;
   await A.router.go('home');
+  A.native.call('bootOk');
+  if (A.native.call('otaRolledBack')) A.alert('העדכון האחרון בוטל', 'העדכון המהיר האחרון לא נפתח כראוי, ולכן האפליקציה חזרה אוטומטית לגרסה הקודמת. הנתונים שלכם לא נפגעו.');
   if (A.settings.get('autoUpdate')) setTimeout(() => A.update.check(false), 2500);
 };
 

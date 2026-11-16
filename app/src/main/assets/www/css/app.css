@@ -79,6 +79,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 32px; }
 .brand h1 { font-size: 1.6em; margin: 0; font-family: "Noto Serif Hebrew", serif; }
 .update-btn { display: block; width: calc(100% - 24px); margin: 6px 12px; min-height: 56px; border: 0; border-radius: 16px; font-weight: 800; font-size: 1.05em; color: #fff; background: linear-gradient(135deg, #2e7d32, #43a047); box-shadow: 0 6px 18px rgba(46,125,50,.4); animation: pulse 2s infinite; }
 @keyframes pulse { 50% { box-shadow: 0 6px 30px rgba(46,125,50,.7); } }
+.update-btn.idle { background: var(--card); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow); animation: none; font-weight: 700; min-height: 50px; }
 .main-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 8px 12px; }
 .tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 92px; padding: 8px 4px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); }
 .tile .ti { font-size: 1.9em; }

@@ -114,53 +114,98 @@ A.security = {
 };
 
 /* ================= עדכונים ================= */
+/* שני סוגי עדכון: מהיר (חבילת ממשק, בלי התקנה) ומלא (קובץ APK, כשמשתנים רכיבי מערכת) */
 A.update = {
   REPO: 'ralgranot-dotcom/my-album',
   available: null,
-  code() { const c = +A.native.call('getVersionCode'); return c || 0; },
+  busy: false,
+  apkCode() { return +A.native.call('getVersionCode') || 0; },
+  ota() { try { const s = A.native.call('otaInfo'); return s ? JSON.parse(s) : null; } catch (e) { return null; } },
+  code() { const o = this.ota(); return Math.max(this.apkCode(), o ? +o.code || 0 : 0); },
+  fetchText(url) {
+    return new Promise(res => {
+      const id = A.native.cb((ok, data) => res(ok ? data : null));
+      A.native.call('checkUpdate', id, url);
+    });
+  },
   async fetchLatest() {
-    if (A.native.has()) {
-      return new Promise(res => {
-        const id = A.native.cb((ok, data) => res(ok ? JSON.parse(data) : { error: data || 'אין חיבור' }));
-        A.native.call('checkUpdate', id, 'https://api.github.com/repos/' + this.REPO + '/releases/latest');
-      });
-    }
-    try { const r = await fetch('https://api.github.com/repos/' + this.REPO + '/releases/latest'); return await r.json(); }
-    catch (e) { return { error: 'אין חיבור לאינטרנט' }; }
+    if (!A.native.has()) return { error: 'n/a' };
+    const t = await this.fetchText('https://api.github.com/repos/' + this.REPO + '/releases/latest');
+    if (!t) return { error: 'אין חיבור לאינטרנט' };
+    try { return JSON.parse(t); } catch (e) { return { error: 'תשובה לא תקינה' }; }
   },
   async check(manual) {
     if (!A.native.has()) { if (manual) A.alert('עדכונים', 'בגרסת הדפדפן העדכון נעשה אוטומטית בכל פתיחה עם חיבור לאינטרנט.'); return; }
+    if (this.busy) return;
+    if (manual && this.available) return this.install();
     const pr = manual ? A.progress('בודק אם יש גרסה חדשה…') : null;
-    if (pr) pr.set(0.4);
-    const j = await this.fetchLatest();
-    if (pr) pr.done();
-    if (!j || j.error || !j.tag_name) { if (manual) A.alert('בדיקת עדכונים', 'לא ניתן היה לבדוק כרגע (' + ((j && (j.error || j.message)) || 'שגיאה') + '). ודאו שיש חיבור לאינטרנט.'); return; }
-    const remote = parseInt(String(j.tag_name).replace(/\D+/g, ''), 10) || 0;
-    const asset = (j.assets || []).find(a => /\.apk$/i.test(a.name));
-    const mine = this.code();
-    if (asset && remote > mine) {
-      this.available = { code: remote, name: (j.name || j.tag_name).replace(/^.*?(\d+\.\d+\.\d+).*$/, '$1'), url: asset.browser_download_url, size: asset.size, notes: j.body || '' };
+    if (pr) pr.set(0.3);
+    try {
+      const j = await this.fetchLatest();
+      if (!j || j.error || !j.tag_name) { if (pr) pr.done(); if (manual) A.alert('בדיקת עדכונים', 'לא ניתן היה לבדוק כרגע (' + ((j && (j.error || j.message)) || 'שגיאה') + '). ודאו שיש חיבור לאינטרנט.'); return; }
+      const remote = parseInt(String(j.tag_name).replace(/\D+/g, ''), 10) || 0;
+      const mine = this.code();
+      if (remote <= mine) { if (pr) pr.done(); if (manual) A.alert('✅ הגרסה עדכנית', 'מותקנת הגרסה האחרונה (' + A.VERSION + ').'); return; }
+      const assets = j.assets || [];
+      const apk = assets.find(a => a.name === 'MyAlbum.apk') || assets.find(a => /\.apk$/i.test(a.name));
+      const zip = assets.find(a => a.name === 'www.zip'), meta = assets.find(a => a.name === 'update.json');
+      const name = (j.name || j.tag_name).replace(/^.*?(\d+\.\d+\.\d+).*$/, '$1');
+      let u = null;
+      if (zip && meta) {
+        if (pr) pr.set(0.6);
+        let m = null; try { m = JSON.parse(await this.fetchText(meta.browser_download_url)); } catch (e) { /* */ }
+        const napi = +A.native.call('getNativeApi') || 1;
+        if (m && +m.code === remote && m.sha256 && +m.native <= napi) u = { mode: 'ota', code: remote, name, url: zip.browser_download_url, size: zip.size, sha: m.sha256, native: +m.native };
+      }
+      if (!u && apk) u = { mode: 'apk', code: remote, name, url: apk.browser_download_url, size: apk.size };
+      if (pr) pr.done();
+      if (!u) { if (manual) A.alert('בדיקת עדכונים', 'נמצאה גרסה חדשה, אך קובץ העדכון עדיין לא מוכן. נסו שוב בעוד כמה דקות.'); return; }
+      u.notes = j.body || '';
+      this.available = u;
       const cur = A.router.stack[A.router.stack.length - 1];
       if (cur && cur.name === 'home') A.router.refresh();
       if (manual) this.install();
-    } else if (manual) A.alert('✅ הגרסה עדכנית', 'מותקנת הגרסה האחרונה (' + A.VERSION + ', בנייה ' + mine + ').');
+    } catch (e) { if (pr) pr.done(); if (manual) A.alert('בדיקת עדכונים', e.message); }
   },
   async install() {
     const u = this.available;
-    if (!u) return;
-    const ok = await A.modal('⬆️ שדרוג לגרסה ' + u.name, A.h('div', null, A.h('p', null, 'גודל ההורדה: ' + A.fmtBytes(u.size)), u.notes ? A.h('pre.notes', null, u.notes.slice(0, 1200)) : null, A.h('p.muted', null, 'האלבומים והתמונות שלכם נשמרים — השדרוג אינו מוחק מידע. מומלץ בכל זאת לגבות מדי פעם.')),
-      [{ label: 'לא עכשיו', value: false }, { label: '⬆️ שדרוג', value: true, cls: 'primary' }]);
+    if (!u || this.busy) return;
+    if (u.mode === 'ota') {
+      this.busy = true;
+      const pr = A.progress('מעדכן לגרסה ' + u.name + '…');
+      const id = A.native.cb((st, v) => {
+        if (st === 'progress') { pr.set(+v || 0, Math.round((+v || 0) * 100) + '%'); return; }
+        this.busy = false;
+        if (st === 'ok') {
+          pr.set(1, 'מפעיל מחדש…');
+          A.toast('✅ עודכן לגרסה ' + u.name, 3000);
+          setTimeout(() => { if (A.native.call('reloadApp') === null) location.reload(); }, 600);
+        } else { pr.done(); this.available = null; A.alert('העדכון לא הושלם', String(v || 'שגיאה') + '\nאפשר לנסות שוב בלחיצה על "עדכון גרסה".'); A.router.refresh(); }
+      });
+      A.native.call('otaApply', id, u.url, u.sha, u.code, u.name, u.native);
+      return;
+    }
+    /* עדכון מלא — נדרש כשמשתנים רכיבי המערכת של האפליקציה */
+    const ok = await A.modal('⬆️ עדכון לגרסה ' + u.name, A.h('div', null,
+      A.h('p', null, 'הגרסה הזו כוללת שינויים ברכיבי המערכת, ולכן אנדרואיד יבקש אישור אחד להתקנה (לחיצה על "עדכון").'),
+      A.h('p', null, 'גודל ההורדה: ' + A.fmtBytes(u.size)),
+      A.h('p.muted', null, 'האלבומים והתמונות שלכם נשמרים — העדכון אינו מוחק מידע.')),
+      [{ label: 'לא עכשיו', value: false }, { label: '⬆️ עדכון', value: true, cls: 'primary' }]);
     if (!ok) return;
-    if (!A.native.has()) { window.open(u.url, '_blank'); return; }
     const pr = A.progress('מוריד את הגרסה החדשה…');
     const id = A.native.cb((status, info) => {
       if (status === 'progress') { pr.set(+info || 0, Math.round((+info || 0) * 100) + '%'); return; }
       pr.done();
-      if (status === 'perm') A.alert('נדרש אישור חד־פעמי', 'נפתח מסך ההגדרות. הפעילו "התר מהמקור הזה" עבור "האלבום שלי", חזרו לאפליקציה ולחצו שוב על כפתור השדרוג.');
+      if (status === 'perm') A.alert('נדרש אישור חד־פעמי', 'נפתח מסך ההגדרות. הפעילו "התר מהמקור הזה" עבור "האלבום שלי", חזרו לאפליקציה ולחצו שוב על כפתור העדכון.');
       else if (status === 'ok') A.toast('מסך ההתקנה נפתח — לחצו "עדכון"', 5000);
-      else A.alert('השדרוג נכשל', String(info || 'שגיאה לא ידועה'));
+      else A.alert('העדכון נכשל', String(info || 'שגיאה לא ידועה'));
     });
     A.native.call('installUpdate', id, u.url);
+  },
+  async resetOta() {
+    if (!this.ota()) return A.toast('לא הותקן עדכון מהיר');
+    if (!(await A.confirm('חזרה לגרסה המקורית', 'העדכון המהיר יוסר, והאפליקציה תחזור לגרסה שהותקנה מהקובץ. הנתונים לא נפגעים.', 'חזרה'))) return;
+    A.native.call('otaReset'); A.native.call('reloadApp');
   }
 };
 
@@ -251,6 +296,11 @@ A.screens.diagnostics = async function () {
     r = row('מנוע הדפדוף');
     if (A.router.stack.some(x => x.name === 'viewer')) r('warn', 'דלג — האלבום פתוח כרגע');
     else { const t = await A.viewer.selfTest(); r(t.ok ? true : false, t.ok ? '3 דפדופים בוצעו (' + t.ms + ' מ״ש)' : 'שגיאה: ' + (t.err || 'הדפדוף לא הושלם')); }
+
+    r = row('גרסה ועדכונים');
+    const ot = A.update.ota();
+    r(true, 'גרסה ' + A.VERSION + (ot ? ' (עדכון מהיר מעל קובץ ההתקנה ' + (A.native.call('getVersionName') || '') + ')' : '') + ' · רכיבי מערכת ' + (A.native.call('getNativeApi') || 1));
+    if (ot) fixes.push({ label: 'חזרה לגרסה שהותקנה מהקובץ (הסרת העדכון המהיר)', fn: async () => { A.native.call('otaReset'); setTimeout(() => A.native.call('reloadApp'), 300); } });
 
     r = row('חיבור לענן ולאלבומים משותפים');
     const shared = albums.filter(a => a.share).length, pubd = albums.filter(a => a.pub).length;
